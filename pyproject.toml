@@ -1,0 +1,35 @@
+[project]
+name = "edge-inference-guardian"
+version = "0.1.0"
+description = "A resource-aware control layer for edge AI pose inference."
+readme = "README.md"
+requires-python = ">=3.10,<3.12"
+license = { text = "MIT" }
+dependencies = [
+    "numpy>=1.24",
+    "opencv-python>=4.8",
+    "psutil>=5.9",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "matplotlib>=3.7",
+    "tensorflow-macos>=2.13; platform_system == 'Darwin' and platform_machine == 'arm64'",
+    "tensorflow>=2.13; platform_system != 'Darwin' or platform_machine != 'arm64'",
+]
+pi = [
+    "tflite-runtime>=2.14",
+    "picamera2>=0.3",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
