@@ -14,8 +14,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "ai-edge-litert>=2.1",
     "pytest>=7.0",
     "matplotlib>=3.7",
+]
+tensorflow-fallback = [
     "tensorflow-macos>=2.13; platform_system == 'Darwin' and platform_machine == 'arm64'",
     "tensorflow>=2.13; platform_system != 'Darwin' or platform_machine != 'arm64'",
 ]

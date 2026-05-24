@@ -9,6 +9,7 @@ benchmark/results/*
 benchmark/reference_clips/*.mp4
 metrics/*
 !metrics/.gitkeep
+tmp/
 
 .vscode/
 .idea/
