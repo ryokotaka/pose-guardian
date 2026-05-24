@@ -16,6 +16,7 @@ Edge Inference Guardian is a small control layer for reliable AI inference under
 - Local output images are written under `tmp/`, which is ignored by Git
 
 ```bash
+.venv/bin/python -m pip install ai-edge-litert
 ./models/download_models.sh
 curl --fail --location --show-error --output tmp/test.jpg \
   https://images.pexels.com/photos/4384679/pexels-photo-4384679.jpeg
