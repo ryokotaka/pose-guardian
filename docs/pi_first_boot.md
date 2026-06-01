@@ -82,6 +82,8 @@ On the Pi:
 python3 --version
 vcgencmd measure_temp
 vcgencmd get_throttled
+od -An -tu4 --endian=big /proc/device-tree/chosen/power/max_current
+sudo dmesg --color=never | grep -iE 'under.?voltage|voltage|throttl'
 v4l2-ctl --list-devices
 ```
 
@@ -90,9 +92,18 @@ Expected baseline:
 - `python3 --version` reports Python 3.11.
 - `vcgencmd measure_temp` returns a temperature.
 - `vcgencmd get_throttled` returns `throttled=0x0` after a clean boot.
+- `max_current` reports `5000` when a Pi 5 has negotiated the full 5V/5A
+  supply. If it reports `3000`, stop before benchmarking: a 5V/3A supply limits
+  the available current for USB peripherals.
+- the kernel log has no `Undervoltage detected!` entry after a clean boot.
 - `v4l2-ctl --list-devices` lists the USB camera.
 
 Record the actual `/dev/videoN` node. Do not assume `/dev/video0`.
+
+See the official Raspberry Pi documentation for
+[`vcgencmd get_throttled`](https://www.raspberrypi.com/documentation/computers/os.html#vcgencmd)
+and the
+[Pi 5 power recommendation](https://www.raspberrypi.com/documentation/computers/getting-started.html#power-supply).
 
 ## 7. Configure read-only GitHub access
 
@@ -209,6 +220,24 @@ v4l2-ctl --list-devices
 ```
 
 Try another USB port and confirm that the official 5V/5A supply is connected.
+
+### `get_throttled` reports a non-zero value
+
+Run:
+
+```bash
+vcgencmd get_throttled
+od -An -tu4 --endian=big /proc/device-tree/chosen/power/max_current
+sudo dmesg --color=never | grep -iE 'under.?voltage|voltage|throttl'
+```
+
+Bits 0-3 report current conditions. Bits 16-19 report conditions that occurred
+after boot. For example, `0x50000` means that undervoltage and throttling
+occurred earlier even if the voltage has since normalised.
+
+Do not record benchmark results while debugging power. If `max_current` is
+`3000`, shut down the Pi and switch to the official Raspberry Pi 27W USB-C
+power supply, or another stable 5V/5A supply, before retrying.
 
 ### `import cv2` fails with a shared-library error
 
