@@ -23,8 +23,7 @@ tensorflow-fallback = [
     "tensorflow>=2.13; platform_system != 'Darwin' or platform_machine != 'arm64'",
 ]
 pi = [
-    "tflite-runtime>=2.14",
-    "picamera2>=0.3",
+    "ai-edge-litert>=2.1",
 ]
 
 [build-system]
