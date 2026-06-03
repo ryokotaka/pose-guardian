@@ -31,23 +31,26 @@ must not be committed.
 
 ## Conditions
 
-| Item | Mac | Pi |
-|---|---|---|
-| Host | martin11.local | edge-pi |
-| OS / arch | macOS 26.5.1 / arm64 | Raspberry Pi OS Bookworm / aarch64 |
-| Python | 3.11.15 | 3.11.2 |
-| Runtime | ai-edge-litert | ai-edge-litert |
-| Power | MacBook internal | 5V/5A, `max_current=5000` |
-| Throttle before | n/a | `0x0` |
-| Throttle after | n/a | `0xe0008` |
-| Temperature before/after | n/a | `46.1'C` -> `83.4'C` |
-| Cooling note | n/a | No active cooler attached, intentionally measured as passive-cooling baseline |
+| Item | Mac | Pi passive | Pi active cooler |
+|---|---|---|---|
+| Host | martin11.local | edge-pi | edge-pi |
+| OS / arch | macOS 26.5.1 / arm64 | Raspberry Pi OS Bookworm / aarch64 | Raspberry Pi OS Bookworm / aarch64 |
+| Python | 3.11.15 | 3.11.2 | 3.11.2 |
+| Runtime | ai-edge-litert | ai-edge-litert | ai-edge-litert |
+| Power | MacBook internal | 5V/5A, `max_current=5000` | 5V/5A, `max_current=5000` |
+| Throttle before | n/a | `0x0` | `0x0` |
+| Throttle after | n/a | `0xe0008` | `0x0` |
+| Temperature before/after | n/a | `46.1'C` -> `83.4'C` | `39.5'C` -> `61.5'C` |
+| Cooling note | n/a | No active cooler attached, intentionally measured as passive-cooling baseline | Active cooler attached, `pwm-fan` detected |
 
 ## Results
 
-First run on 2026-06-03. This is the **passive-cooling baseline**: the Pi was
-powered correctly (`max_current=5000`, no undervoltage) but had no active cooler
-attached. The run ended with thermal throttle flags, which is part of the result.
+Runs on 2026-06-03. The first Pi run is the **passive-cooling baseline**: the Pi
+was powered correctly (`max_current=5000`, no undervoltage) but had no active
+cooler attached. The second Pi run uses the same clips and script after
+attaching the active cooler.
+
+### Passive-cooling baseline
 
 | Clip | Model | Mac inf avg/med/p95 ms | Pi inf avg/med/p95 ms | Mac pre avg ms | Pi pre avg ms | Mac FPS | Pi FPS | Pi/Mac avg |
 |---|---|---:|---:|---:|---:|---:|---:|---|
@@ -76,17 +79,67 @@ after:  temp=83.4'C, throttled=0xe0008, max_current=5000
 after the benchmark, and also has historical frequency-cap/throttle/soft-temp
 flags. There is no undervoltage bit.
 
+### Active cooler run
+
+| Clip | Model | Pi active inf avg/med/p95 ms | Pi active pre avg ms | Pi active FPS | Passive inf avg ms | Active vs passive |
+|---|---|---:|---:|---:|---:|---:|
+| still | Thunder | 35.03 / 35.02 / 35.20 | 1.73 | 26.30 | 35.09 | 1.00x |
+| still | Lightning | 8.65 / 8.65 / 8.74 | 1.68 | 86.99 | 8.72 | 0.99x |
+| slow | Thunder | 34.93 / 34.92 / 35.09 | 1.72 | 26.37 | 39.64 | 0.88x |
+| slow | Lightning | 8.65 / 8.65 / 8.73 | 1.67 | 86.53 | 9.80 | 0.88x |
+| fast | Thunder | 34.93 / 34.93 / 35.12 | 1.72 | 26.36 | 42.15 | 0.83x |
+| fast | Lightning | 8.65 / 8.65 / 8.73 | 1.68 | 86.75 | 10.14 | 0.85x |
+
+Active cooler summary:
+
+| Model | Pi active avg inference | Pi active avg effective FPS | Passive avg inference | Passive avg effective FPS |
+|---|---:|---:|---:|---:|
+| Thunder | 34.96 ms | 26.35 FPS | 38.96 ms | 23.67 FPS |
+| Lightning | 8.65 ms | 86.76 FPS | 9.55 ms | 77.73 FPS |
+
+Thermal flags:
+
+```text
+before: temp=39.5'C, throttled=0x0, max_current=5000
+after:  temp=61.5'C, throttled=0x0, max_current=5000
+```
+
+The active cooler did not make the Pi fundamentally match the Mac. Its main
+value is that the fixed benchmark completed without thermal throttle and with a
+much lower final temperature.
+
+### Live-camera smoke
+
+After plugging in the Logitech C270, `v4l2-ctl --list-devices` showed the camera
+as `/dev/video0` and `/dev/video1`; `/dev/video0` is the capture node. The
+headless live-camera smoke test passed:
+
+```text
+python examples/run_demo.py --device 0 --no-display --duration 30
+
+finished: elapsed=30.1s  frames=572  last_model=thunder
+last_inference_ms=36.9  last_preprocess_ms=1.7
+last_avg_conf=0.059  fps_ema=19.86
+camera stats: {'frames_read': 574, 'frames_dropped': 0, 'frame_id': 574, 'is_alive': False}
+after: temp=57.6'C, throttled=0x0, max_current=5000
+```
+
+The low `last_avg_conf` is not a benchmark failure; it depends on what the
+camera could see at the end of the smoke test. The purpose of this smoke test is
+to prove that the live camera path runs on Pi without crashing.
+
 ## Interpretation
 
 - Fixed clips make Mac/Pi comparison fair because input frames are identical.
 - `run_demo.py` remains a live-camera smoke test. It is not the main benchmark.
 - If undervoltage appears, mark the results as power-noisy and repeat after
   fixing power/cabling.
-- If thermal throttling appears, record the cooling condition and compare
-  passive vs active cooling.
-- This first run is **thermal-limited**, not power-noisy. Use it as the
-  no-active-cooler baseline. Run the same benchmark again after attaching the
-  active cooler to compare passive vs active cooling.
-- Lightning already shows enough headroom for real-time inference on Pi. Thunder
-  is below 30 FPS in this first run and may be worse under live-camera overhead,
-  so Week 3 controller thresholds should treat Lightning as the thermal fallback.
+- If thermal throttling appears, record the cooling condition. The passive run
+  did throttle; the active cooler run did not.
+- The passive run is **thermal-limited**, not power-noisy. The active cooler run
+  demonstrates that cooling can remove the thermal throttle under the same
+  fixed-clip workload.
+- Lightning shows enough headroom for real-time inference on Pi. Thunder remains
+  below 30 FPS even with the active cooler, and the live-camera smoke reached
+  about 20 FPS. Week 3 controller thresholds should treat Lightning as the
+  thermal/performance fallback.
