@@ -63,6 +63,8 @@ class ResourceController:
         if self.config.min_latency_samples <= 0:
             raise ValueError("min_latency_samples must be positive")
         self._state = ControllerState.NORMAL
+        self._recovery_started_at: float | None = None
+        self._recovery_target_state: ControllerState | None = None
 
     @property
     def state(self) -> ControllerState:
@@ -75,16 +77,23 @@ class ResourceController:
     ) -> ControlAction:
         """Evaluate the snapshot and return the action for the next loop.
 
-        Week 3 Day 1 implements upward transitions only. Recovery hysteresis and
-        hold timers are added in Day 2, so a degraded/critical controller stays
-        there until that logic exists.
+        Upward transitions happen immediately when pressure crosses configured
+        limits. Recovery uses lower thresholds plus a hold timer so the
+        controller does not chatter around a boundary.
         """
         previous_state = self._state
         pressure_state, reasons = self._pressure_state(snapshot, recent_latencies_ms)
-        next_state = self._next_state(previous_state, pressure_state)
+        next_state, recovery_reason = self._next_state(
+            previous_state,
+            pressure_state,
+            snapshot,
+            recent_latencies_ms,
+        )
         self._state = next_state
         action = self._action_for_transition(previous_state, next_state, reasons)
-        reason = "; ".join(reasons) if reasons else "within configured limits"
+        reason = recovery_reason or (
+            "; ".join(reasons) if reasons else "within configured limits"
+        )
         return ControlAction(
             action=action,
             state=next_state,
@@ -99,6 +108,7 @@ class ResourceController:
         snapshot: ResourceSnapshot,
         recent_latencies_ms: Sequence[float] | None,
     ) -> tuple[ControllerState, list[str]]:
+        latencies = tuple(recent_latencies_ms or ())
         critical_reasons: list[str] = []
         degraded_reasons: list[str] = []
 
@@ -138,10 +148,10 @@ class ResourceController:
                 )
             )
 
-        p95 = _p95(recent_latencies_ms or ())
+        p95 = _p95(latencies)
         if (
             p95 is not None
-            and len(recent_latencies_ms or ()) >= self.config.min_latency_samples
+            and len(latencies) >= self.config.min_latency_samples
             and p95 > self.config.latency_slo_ms
         ):
             degraded_reasons.append(
@@ -154,18 +164,44 @@ class ResourceController:
             return ControllerState.DEGRADED, degraded_reasons
         return ControllerState.NORMAL, []
 
-    @staticmethod
     def _next_state(
+        self,
         previous_state: ControllerState,
         pressure_state: ControllerState,
-    ) -> ControllerState:
+        snapshot: ResourceSnapshot,
+        recent_latencies_ms: Sequence[float] | None,
+    ) -> tuple[ControllerState, str | None]:
         if pressure_state is ControllerState.CRITICAL:
-            return ControllerState.CRITICAL
+            self._clear_recovery_timer()
+            return ControllerState.CRITICAL, None
         if pressure_state is ControllerState.DEGRADED:
             if previous_state is ControllerState.CRITICAL:
-                return ControllerState.CRITICAL
-            return ControllerState.DEGRADED
-        return previous_state
+                return self._recover_with_hold(
+                    target_state=ControllerState.DEGRADED,
+                    required_hold_sec=self.config.critical_hold_sec,
+                    conditions=self._can_recover_to_degraded(snapshot),
+                    timestamp=snapshot.timestamp,
+                )
+            self._clear_recovery_timer()
+            return ControllerState.DEGRADED, None
+
+        if previous_state is ControllerState.CRITICAL:
+            return self._recover_with_hold(
+                target_state=ControllerState.DEGRADED,
+                required_hold_sec=self.config.critical_hold_sec,
+                conditions=self._can_recover_to_degraded(snapshot),
+                timestamp=snapshot.timestamp,
+            )
+        if previous_state is ControllerState.DEGRADED:
+            return self._recover_with_hold(
+                target_state=ControllerState.NORMAL,
+                required_hold_sec=self.config.degraded_hold_sec,
+                conditions=self._can_recover_to_normal(snapshot, recent_latencies_ms),
+                timestamp=snapshot.timestamp,
+            )
+
+        self._clear_recovery_timer()
+        return previous_state, None
 
     @staticmethod
     def _action_for_transition(
@@ -185,9 +221,107 @@ class ResourceController:
             return ActionType.SWITCH_TO_HEAVY
         return ActionType.NONE
 
+    def _recover_with_hold(
+        self,
+        *,
+        target_state: ControllerState,
+        required_hold_sec: float,
+        conditions: list[str],
+        timestamp: float,
+    ) -> tuple[ControllerState, str | None]:
+        if not conditions:
+            self._clear_recovery_timer()
+            return self._state, "recovery blocked: recovery thresholds not met"
+
+        if self._recovery_target_state is not target_state:
+            self._recovery_target_state = target_state
+            self._recovery_started_at = timestamp
+
+        assert self._recovery_started_at is not None
+        held_sec = max(0.0, timestamp - self._recovery_started_at)
+        reason = (
+            f"recovery to {target_state.value}: "
+            f"{'; '.join(conditions)}; "
+            f"held={held_sec:.1f}s required={required_hold_sec:.1f}s"
+        )
+        if held_sec >= required_hold_sec:
+            self._clear_recovery_timer()
+            return target_state, reason
+        return self._state, reason
+
+    def _clear_recovery_timer(self) -> None:
+        self._recovery_started_at = None
+        self._recovery_target_state = None
+
+    def _can_recover_to_normal(
+        self,
+        snapshot: ResourceSnapshot,
+        recent_latencies_ms: Sequence[float] | None,
+    ) -> list[str]:
+        conditions: list[str] = []
+        if snapshot.is_throttled:
+            return []
+        if snapshot.cpu_temp_celsius >= self.config.temp_recover_normal_celsius:
+            return []
+        if snapshot.memory_used_percent >= self.config.memory_recover_normal_percent:
+            return []
+
+        latencies = tuple(recent_latencies_ms or ())
+        p95 = _p95(latencies)
+        if len(latencies) >= self.config.min_latency_samples:
+            if p95 is None or p95 >= self.config.latency_recover_ms:
+                return []
+            conditions.append(
+                _recovery_reason(
+                    "latency_p95_ms",
+                    p95,
+                    self.config.latency_recover_ms,
+                )
+            )
+
+        conditions.extend(
+            [
+                _recovery_reason(
+                    "cpu_temp_celsius",
+                    snapshot.cpu_temp_celsius,
+                    self.config.temp_recover_normal_celsius,
+                ),
+                _recovery_reason(
+                    "memory_used_percent",
+                    snapshot.memory_used_percent,
+                    self.config.memory_recover_normal_percent,
+                ),
+            ]
+        )
+        return conditions
+
+    def _can_recover_to_degraded(self, snapshot: ResourceSnapshot) -> list[str]:
+        if snapshot.is_throttled:
+            return []
+        if snapshot.cpu_temp_celsius >= self.config.temp_recover_degraded_celsius:
+            return []
+        if snapshot.memory_used_percent >= self.config.memory_recover_degraded_percent:
+            return []
+        return [
+            _recovery_reason(
+                "cpu_temp_celsius",
+                snapshot.cpu_temp_celsius,
+                self.config.temp_recover_degraded_celsius,
+            ),
+            _recovery_reason(
+                "memory_used_percent",
+                snapshot.memory_used_percent,
+                self.config.memory_recover_degraded_percent,
+            ),
+        ]
+
 
 def _threshold_reason(metric: str, value: float, threshold: float) -> str:
     return f"{metric}={value:.1f} >= threshold={threshold:.1f}"
+
+
+def _recovery_reason(metric: str, value: float, threshold: float) -> str:
+    return f"{metric}={value:.1f} < recovery={threshold:.1f}"
 
 
 def _p95(values: Sequence[float]) -> float | None:

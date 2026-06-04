@@ -135,16 +135,89 @@ def test_evaluate_escalates_from_degraded_to_critical() -> None:
     assert critical.action is ActionType.SKIP_FRAME
 
 
-def test_evaluate_does_not_recover_before_hysteresis_day() -> None:
+def test_evaluate_recovers_from_degraded_after_hold_time() -> None:
     controller = ResourceController()
-    degraded = controller.evaluate(make_snapshot(cpu_temp_celsius=72.0))
+    degraded = controller.evaluate(make_snapshot(timestamp=0.0, cpu_temp_celsius=72.0))
 
-    normal_input = controller.evaluate(make_snapshot(cpu_temp_celsius=40.0))
+    pending = controller.evaluate(make_snapshot(timestamp=1.0, cpu_temp_celsius=55.0))
+    recovered = controller.evaluate(make_snapshot(timestamp=11.0, cpu_temp_celsius=55.0))
 
     assert degraded.state is ControllerState.DEGRADED
-    assert normal_input.previous_state is ControllerState.DEGRADED
-    assert normal_input.state is ControllerState.DEGRADED
-    assert normal_input.action is ActionType.NONE
+    assert pending.previous_state is ControllerState.DEGRADED
+    assert pending.state is ControllerState.DEGRADED
+    assert pending.action is ActionType.NONE
+    assert "held=0.0s required=10.0s" in pending.reason
+    assert recovered.previous_state is ControllerState.DEGRADED
+    assert recovered.state is ControllerState.NORMAL
+    assert recovered.action is ActionType.SWITCH_TO_HEAVY
+    assert "held=10.0s required=10.0s" in recovered.reason
+
+
+def test_recovery_timer_resets_when_recovery_condition_breaks() -> None:
+    controller = ResourceController()
+    controller.evaluate(make_snapshot(timestamp=0.0, cpu_temp_celsius=72.0))
+    controller.evaluate(make_snapshot(timestamp=1.0, cpu_temp_celsius=55.0))
+
+    blocked = controller.evaluate(make_snapshot(timestamp=5.0, cpu_temp_celsius=61.0))
+    restarted = controller.evaluate(make_snapshot(timestamp=6.0, cpu_temp_celsius=55.0))
+    still_pending = controller.evaluate(make_snapshot(timestamp=15.0, cpu_temp_celsius=55.0))
+    recovered = controller.evaluate(make_snapshot(timestamp=16.0, cpu_temp_celsius=55.0))
+
+    assert blocked.state is ControllerState.DEGRADED
+    assert "recovery blocked" in blocked.reason
+    assert restarted.state is ControllerState.DEGRADED
+    assert "held=0.0s required=10.0s" in restarted.reason
+    assert still_pending.state is ControllerState.DEGRADED
+    assert "held=9.0s required=10.0s" in still_pending.reason
+    assert recovered.state is ControllerState.NORMAL
+
+
+def test_temperature_chatter_near_degraded_threshold_does_not_recover() -> None:
+    controller = ResourceController()
+    controller.evaluate(make_snapshot(timestamp=0.0, cpu_temp_celsius=72.0))
+
+    for timestamp, temp in [(1.0, 69.0), (2.0, 71.0), (3.0, 59.0), (4.0, 61.0)]:
+        action = controller.evaluate(
+            make_snapshot(timestamp=timestamp, cpu_temp_celsius=temp)
+        )
+
+        assert action.state is ControllerState.DEGRADED
+        assert action.action is ActionType.NONE
+
+
+def test_evaluate_recovers_from_critical_to_degraded_after_hold_time() -> None:
+    controller = ResourceController()
+    critical = controller.evaluate(make_snapshot(timestamp=0.0, cpu_temp_celsius=83.4))
+
+    pending = controller.evaluate(make_snapshot(timestamp=1.0, cpu_temp_celsius=60.0))
+    recovered = controller.evaluate(make_snapshot(timestamp=16.0, cpu_temp_celsius=60.0))
+
+    assert critical.state is ControllerState.CRITICAL
+    assert pending.state is ControllerState.CRITICAL
+    assert "held=0.0s required=15.0s" in pending.reason
+    assert recovered.previous_state is ControllerState.CRITICAL
+    assert recovered.state is ControllerState.DEGRADED
+    assert recovered.action is ActionType.SWITCH_TO_LIGHT
+    assert "held=15.0s required=15.0s" in recovered.reason
+
+
+def test_latency_must_recover_below_recovery_threshold() -> None:
+    controller = ResourceController()
+    slow = [210.0] * 20
+    medium = [150.0] * 20
+    fast = [100.0] * 20
+    controller.evaluate(make_snapshot(timestamp=0.0), slow)
+
+    blocked = controller.evaluate(make_snapshot(timestamp=20.0), medium)
+    pending = controller.evaluate(make_snapshot(timestamp=21.0), fast)
+    recovered = controller.evaluate(make_snapshot(timestamp=31.0), fast)
+
+    assert blocked.state is ControllerState.DEGRADED
+    assert "recovery blocked" in blocked.reason
+    assert pending.state is ControllerState.DEGRADED
+    assert "latency_p95_ms=100.0 < recovery=140.0" in pending.reason
+    assert recovered.state is ControllerState.NORMAL
+    assert recovered.action is ActionType.SWITCH_TO_HEAVY
 
 
 def test_control_action_keeps_source_snapshot_and_timestamp() -> None:
