@@ -194,8 +194,13 @@ def _read_psutil_temp() -> float | None:
     for entries in sensors.values():
         for entry in entries:
             current = getattr(entry, "current", None)
-            if current is not None:
-                return float(current)
+            if current is None:
+                continue
+            value = float(current)
+            # Skip physically implausible readings. Some VMs expose a bogus
+            # sensor at absolute zero (-273.15) or other junk values.
+            if -40.0 <= value <= 200.0:
+                return value
     return None
 
 

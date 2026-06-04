@@ -11,6 +11,7 @@ from src.resource_monitor import (
     _parse_get_throttled,
     _parse_measure_temp,
     _parse_pmic_read_adc,
+    _read_psutil_temp,
     is_currently_throttled,
     read_resources,
 )
@@ -62,6 +63,23 @@ def test_normalize_pmic_rail_name() -> None:
     assert _normalize_pmic_rail_name("3V3_SYS_A") == "3V3_SYS"
     assert _normalize_pmic_rail_name("3V3_SYS_V") == "3V3_SYS"
     assert _normalize_pmic_rail_name("BATT") == "BATT"
+
+
+def test_read_psutil_temp_skips_implausible_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Sensor:
+        def __init__(self, current: float | None) -> None:
+            self.current = current
+
+    monkeypatch.setattr(
+        resource_monitor.psutil,
+        "sensors_temperatures",
+        lambda: {"bogus": [Sensor(-273.15)], "cpu": [Sensor(42.5)]},
+        raising=False,
+    )
+
+    assert _read_psutil_temp() == 42.5
 
 
 def test_read_resources_returns_full_snapshot() -> None:
