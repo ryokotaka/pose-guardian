@@ -60,6 +60,7 @@ from src.resource_monitor import (  # noqa: E402
 
 
 CONTROL_CSV_FIELDS = [
+    "controller_mode",
     "state",
     "previous_state",
     "action",
@@ -166,6 +167,15 @@ def parse_args() -> argparse.Namespace:
         help="Recent inference latency count passed to ResourceController.",
     )
     parser.add_argument(
+        "--controller-mode",
+        choices=["controlled", "naive"],
+        default="controlled",
+        help=(
+            "controlled applies ResourceController actions; naive keeps the "
+            "initial model fixed while logging the same metrics."
+        ),
+    )
+    parser.add_argument(
         "--num-threads",
         type=int,
         default=4,
@@ -259,6 +269,21 @@ def should_log_action(action: ControlAction) -> bool:
     return action.action is not ActionType.NONE
 
 
+def controller_enabled(mode: str) -> bool:
+    return mode == "controlled"
+
+
+def noop_control_action(snapshot: ResourceSnapshot) -> ControlAction:
+    return ControlAction(
+        action=ActionType.NONE,
+        state=ControllerState.NORMAL,
+        previous_state=ControllerState.NORMAL,
+        reason="controller disabled: fixed initial model",
+        timestamp=snapshot.timestamp,
+        source_snapshot=snapshot,
+    )
+
+
 def should_skip_frame(
     *,
     state: ControllerState,
@@ -285,6 +310,7 @@ def controlled_csv_row(
     control_action: ControlAction | None,
     stats: ControlRuntimeStats,
     recent_latencies_ms: Sequence[float],
+    controller_mode: str = "controlled",
     fault_scenario: FaultScenario = FaultScenario.NONE,
     fault_active: bool = False,
 ) -> dict[str, Any]:
@@ -297,6 +323,7 @@ def controlled_csv_row(
     )
     row.update(
         {
+            "controller_mode": controller_mode,
             "state": (
                 control_action.state.value
                 if control_action is not None
@@ -359,6 +386,7 @@ def write_controlled_row(
     control_action: ControlAction | None,
     stats: ControlRuntimeStats,
     recent_latencies_ms: Sequence[float],
+    controller_mode: str = "controlled",
     fault_scenario: FaultScenario = FaultScenario.NONE,
     fault_active: bool = False,
 ) -> None:
@@ -372,6 +400,7 @@ def write_controlled_row(
             control_action=control_action,
             stats=stats,
             recent_latencies_ms=recent_latencies_ms,
+            controller_mode=controller_mode,
             fault_scenario=fault_scenario,
             fault_active=fault_active,
         )
@@ -453,6 +482,7 @@ def main() -> int:
         f"runtime: {info['runtime']}  model: {estimator.current_model()}  "
         f"threads: {args.num_threads}"
     )
+    print(f"controller mode: {args.controller_mode}")
     print(f"controller state: {controller.state.value}")
     print(f"logging CSV: {args.csv_output}")
     if fault_scenario is not FaultScenario.NONE:
@@ -463,7 +493,7 @@ def main() -> int:
     if not args.no_display:
         print("keys: 'q' quit")
 
-    window_name = "Edge Inference Guardian controlled"
+    window_name = f"Edge Inference Guardian {args.controller_mode}"
     if not args.no_display:
         dummy = np.zeros((args.height, args.width, 3), dtype=np.uint8)
         cv2.imshow(window_name, dummy)
@@ -524,6 +554,7 @@ def main() -> int:
                             control_action=action_for_log,
                             stats=stats,
                             recent_latencies_ms=tuple(recent_latencies),
+                            controller_mode=args.controller_mode,
                             fault_scenario=fault_scenario,
                             fault_active=fault_active,
                         )
@@ -543,10 +574,14 @@ def main() -> int:
                 last_frame_id = current_id
                 frames_seen += 1
                 snapshot = monitor.snapshot()
-                action = controller.evaluate(snapshot, tuple(recent_latencies))
+                if controller_enabled(args.controller_mode):
+                    action = controller.evaluate(snapshot, tuple(recent_latencies))
+                else:
+                    action = noop_control_action(snapshot)
                 last_action = action
-                apply_control_action(action, estimator, stats)
-                if should_log_action(action):
+                if controller_enabled(args.controller_mode):
+                    apply_control_action(action, estimator, stats)
+                if controller_enabled(args.controller_mode) and should_log_action(action):
                     pending_log_action = action
 
                 skip_frame = should_skip_frame(
@@ -578,6 +613,7 @@ def main() -> int:
                         control_action=action_for_log,
                         stats=stats,
                         recent_latencies_ms=tuple(recent_latencies),
+                        controller_mode=args.controller_mode,
                         fault_scenario=fault_scenario,
                         fault_active=fault_active,
                     )

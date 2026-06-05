@@ -7,8 +7,10 @@ from examples.run_controlled import (
     CSV_FIELDS,
     ControlRuntimeStats,
     apply_control_action,
+    controller_enabled,
     controlled_csv_row,
     latency_p95,
+    noop_control_action,
     should_log_action,
     should_skip_frame,
 )
@@ -100,6 +102,23 @@ def test_should_log_action_only_keeps_real_actions() -> None:
     assert should_log_action(make_action(ActionType.NONE)) is False
 
 
+def test_controller_enabled_only_for_controlled_mode() -> None:
+    assert controller_enabled("controlled") is True
+    assert controller_enabled("naive") is False
+
+
+def test_noop_control_action_marks_controller_disabled() -> None:
+    snapshot = make_snapshot()
+    action = noop_control_action(snapshot)
+
+    assert action.action is ActionType.NONE
+    assert action.state is ControllerState.NORMAL
+    assert action.previous_state is ControllerState.NORMAL
+    assert action.reason == "controller disabled: fixed initial model"
+    assert action.timestamp == snapshot.timestamp
+    assert action.source_snapshot is snapshot
+
+
 def test_should_skip_frame_only_in_critical() -> None:
     assert (
         should_skip_frame(
@@ -142,6 +161,7 @@ def test_controlled_csv_row_contains_control_columns() -> None:
     )
 
     assert set(CSV_FIELDS) == set(row)
+    assert row["controller_mode"] == "controlled"
     assert row["model"] == "lightning"
     assert row["state"] == "degraded"
     assert row["previous_state"] == "normal"
@@ -154,6 +174,28 @@ def test_controlled_csv_row_contains_control_columns() -> None:
     assert row["recent_latency_p95_ms"] == 40.0
     assert row["fault_scenario"] == "none"
     assert row["fault_active"] is False
+
+
+def test_controlled_csv_row_can_mark_naive_mode() -> None:
+    row = controlled_csv_row(
+        snapshot=make_snapshot(),
+        elapsed_s=2.0,
+        model_name="thunder",
+        frames_processed=10,
+        last_pose=None,
+        control_action=noop_control_action(make_snapshot()),
+        stats=ControlRuntimeStats(),
+        recent_latencies_ms=[210.0],
+        controller_mode="naive",
+    )
+
+    assert row["controller_mode"] == "naive"
+    assert row["model"] == "thunder"
+    assert row["state"] == "normal"
+    assert row["action"] == "none"
+    assert row["action_reason"] == "controller disabled: fixed initial model"
+    assert row["model_switches"] == 0
+    assert row["recent_latency_p95_ms"] == 210.0
 
 
 class FakeFaultInjector:
