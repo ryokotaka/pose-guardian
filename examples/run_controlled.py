@@ -40,6 +40,7 @@ from examples.run_monitored import (  # noqa: E402
 )
 from examples.sanity_check import draw_pose  # noqa: E402
 from src.camera import Camera, CameraConfig  # noqa: E402
+from src.fault_injector import FaultInjector, FaultScenario  # noqa: E402
 from src.pose_estimator import (  # noqa: E402
     PoseEstimator,
     PoseEstimatorConfig,
@@ -69,7 +70,11 @@ CONTROL_CSV_FIELDS = [
     "switch_ms",
     "recent_latency_p95_ms",
 ]
-CSV_FIELDS = [*MONITORED_CSV_FIELDS, *CONTROL_CSV_FIELDS]
+FAULT_CSV_FIELDS = [
+    "fault_scenario",
+    "fault_active",
+]
+CSV_FIELDS = [*MONITORED_CSV_FIELDS, *CONTROL_CSV_FIELDS, *FAULT_CSV_FIELDS]
 
 
 @dataclass
@@ -171,6 +176,36 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Do not run vcgencmd pmic_read_adc for PMIC rail estimates.",
     )
+    parser.add_argument(
+        "--fault-scenario",
+        choices=[scenario.value for scenario in FaultScenario],
+        default=FaultScenario.NONE.value,
+        help="Optional pressure scenario to start during the run.",
+    )
+    parser.add_argument(
+        "--fault-start-after",
+        type=float,
+        default=10.0,
+        help="Seconds after start before fault injection begins.",
+    )
+    parser.add_argument(
+        "--fault-duration",
+        type=float,
+        default=20.0,
+        help="Fault injection duration in seconds.",
+    )
+    parser.add_argument(
+        "--fault-memory-target-percent",
+        type=float,
+        default=85.0,
+        help="Memory pressure target percent. Hard-capped by FaultInjector.",
+    )
+    parser.add_argument(
+        "--fault-cpu-workers",
+        type=int,
+        default=2,
+        help="CPU workers for cpu_stress scenario.",
+    )
     return parser.parse_args()
 
 
@@ -180,6 +215,15 @@ def validate_args(args: argparse.Namespace) -> int:
         return validation
     if args.latency_window_size <= 0:
         print("ERROR: --latency-window-size must be > 0", file=sys.stderr)
+        return 2
+    if args.fault_start_after < 0:
+        print("ERROR: --fault-start-after must be >= 0", file=sys.stderr)
+        return 2
+    if args.fault_duration <= 0:
+        print("ERROR: --fault-duration must be > 0", file=sys.stderr)
+        return 2
+    if args.fault_cpu_workers <= 0:
+        print("ERROR: --fault-cpu-workers must be > 0", file=sys.stderr)
         return 2
     return 0
 
@@ -237,6 +281,8 @@ def controlled_csv_row(
     control_action: ControlAction | None,
     stats: ControlRuntimeStats,
     recent_latencies_ms: Sequence[float],
+    fault_scenario: FaultScenario = FaultScenario.NONE,
+    fault_active: bool = False,
 ) -> dict[str, Any]:
     row = monitored_csv_row(
         snapshot=snapshot,
@@ -266,6 +312,8 @@ def controlled_csv_row(
             "force_gc_count": stats.force_gc_count,
             "switch_ms": rounded(stats.last_switch_ms),
             "recent_latency_p95_ms": rounded(latency_p95(recent_latencies_ms)),
+            "fault_scenario": fault_scenario.value,
+            "fault_active": fault_active,
         }
     )
     return row
@@ -307,6 +355,8 @@ def write_controlled_row(
     control_action: ControlAction | None,
     stats: ControlRuntimeStats,
     recent_latencies_ms: Sequence[float],
+    fault_scenario: FaultScenario = FaultScenario.NONE,
+    fault_active: bool = False,
 ) -> None:
     writer.writerow(
         controlled_csv_row(
@@ -318,8 +368,30 @@ def write_controlled_row(
             control_action=control_action,
             stats=stats,
             recent_latencies_ms=recent_latencies_ms,
+            fault_scenario=fault_scenario,
+            fault_active=fault_active,
         )
     )
+
+
+def start_configured_fault(args: argparse.Namespace, injector: FaultInjector) -> None:
+    scenario = FaultScenario(args.fault_scenario)
+    if scenario is FaultScenario.NONE:
+        return
+    if scenario is FaultScenario.MEMORY_PRESSURE:
+        injector.inject_memory_pressure(
+            target_percent=args.fault_memory_target_percent,
+            duration_sec=args.fault_duration,
+        )
+    elif scenario is FaultScenario.CPU_STRESS:
+        injector.inject_cpu_stress(
+            duration_sec=args.fault_duration,
+            num_workers=args.fault_cpu_workers,
+        )
+    elif scenario is FaultScenario.CAMERA_DISCONNECT:
+        raise ValueError("camera_disconnect is not wired into Camera in Week3 Day4")
+    else:
+        raise ValueError(f"unsupported fault scenario: {scenario.value}")
 
 
 def main() -> int:
@@ -355,6 +427,8 @@ def main() -> int:
         )
     )
     controller = ResourceController()
+    fault_scenario = FaultScenario(args.fault_scenario)
+    fault_injector = FaultInjector()
     cam = Camera(
         CameraConfig(
             device_index=args.device,
@@ -377,6 +451,11 @@ def main() -> int:
     )
     print(f"controller state: {controller.state.value}")
     print(f"logging CSV: {args.csv_output}")
+    if fault_scenario is not FaultScenario.NONE:
+        print(
+            f"fault: {fault_scenario.value} starts after "
+            f"{args.fault_start_after:.1f}s for {args.fault_duration:.1f}s"
+        )
     if not args.no_display:
         print("keys: 'q' quit")
 
@@ -396,6 +475,7 @@ def main() -> int:
     start_t = time.perf_counter()
     next_log_t = start_t
     rows_written = 0
+    fault_started = False
     monitor.start()
 
     try:
@@ -408,6 +488,22 @@ def main() -> int:
                 elapsed = now - start_t
                 if args.duration > 0 and elapsed >= args.duration:
                     break
+                if (
+                    fault_scenario is not FaultScenario.NONE
+                    and not fault_started
+                    and elapsed >= args.fault_start_after
+                ):
+                    try:
+                        start_configured_fault(args, fault_injector)
+                    except ValueError as exc:
+                        print(f"ERROR: {exc}", file=sys.stderr)
+                        return 2
+                    fault_started = True
+                    print(
+                        f"fault started: {fault_scenario.value} "
+                        f"duration={args.fault_duration:.1f}s"
+                    )
+                fault_active = fault_injector.is_active(fault_scenario)
 
                 frame, current_id = cam.read_new_frame(last_frame_id)
                 if frame is None:
@@ -422,6 +518,8 @@ def main() -> int:
                             control_action=last_action,
                             stats=stats,
                             recent_latencies_ms=tuple(recent_latencies),
+                            fault_scenario=fault_scenario,
+                            fault_active=fault_active,
                         )
                         f.flush()
                         rows_written += 1
@@ -466,6 +564,8 @@ def main() -> int:
                         control_action=action,
                         stats=stats,
                         recent_latencies_ms=tuple(recent_latencies),
+                        fault_scenario=fault_scenario,
+                        fault_active=fault_active,
                     )
                     f.flush()
                     rows_written += 1
@@ -483,6 +583,7 @@ def main() -> int:
                     if cv2.waitKey(1) & 0xFF == ord("q"):
                         break
     finally:
+        fault_injector.clear_all()
         monitor.stop()
         cam.stop()
         cv2.destroyAllWindows()

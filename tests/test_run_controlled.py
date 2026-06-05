@@ -1,5 +1,6 @@
 from src.resource_controller import ActionType, ControlAction, ControllerState
 from src.resource_monitor import ResourceSnapshot
+from src.fault_injector import FaultScenario
 
 from examples import run_controlled
 from examples.run_controlled import (
@@ -143,3 +144,68 @@ def test_controlled_csv_row_contains_control_columns() -> None:
     assert row["force_gc_count"] == 1
     assert row["switch_ms"] == 0.25
     assert row["recent_latency_p95_ms"] == 40.0
+    assert row["fault_scenario"] == "none"
+    assert row["fault_active"] is False
+
+
+class FakeFaultInjector:
+    def __init__(self) -> None:
+        self.calls = []
+
+    def inject_memory_pressure(self, **kwargs) -> None:
+        self.calls.append(("memory", kwargs))
+
+    def inject_cpu_stress(self, **kwargs) -> None:
+        self.calls.append(("cpu", kwargs))
+
+
+def test_start_configured_fault_starts_memory_pressure() -> None:
+    args = type(
+        "Args",
+        (),
+        {
+            "fault_scenario": FaultScenario.MEMORY_PRESSURE.value,
+            "fault_memory_target_percent": 85.0,
+            "fault_duration": 3.0,
+            "fault_cpu_workers": 2,
+        },
+    )()
+    injector = FakeFaultInjector()
+
+    run_controlled.start_configured_fault(args, injector)
+
+    assert injector.calls == [
+        (
+            "memory",
+            {
+                "target_percent": 85.0,
+                "duration_sec": 3.0,
+            },
+        )
+    ]
+
+
+def test_start_configured_fault_starts_cpu_stress() -> None:
+    args = type(
+        "Args",
+        (),
+        {
+            "fault_scenario": FaultScenario.CPU_STRESS.value,
+            "fault_memory_target_percent": 85.0,
+            "fault_duration": 3.0,
+            "fault_cpu_workers": 2,
+        },
+    )()
+    injector = FakeFaultInjector()
+
+    run_controlled.start_configured_fault(args, injector)
+
+    assert injector.calls == [
+        (
+            "cpu",
+            {
+                "duration_sec": 3.0,
+                "num_workers": 2,
+            },
+        )
+    ]
