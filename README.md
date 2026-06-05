@@ -8,32 +8,43 @@ switches between a heavier and lighter model when the device is under pressure.
 The goal is not maximum benchmark speed. The goal is to keep an edge-AI pipeline
 usable when CPU load, heat, memory pressure, or camera faults appear.
 
-![Naive vs controlled latency and FPS](docs/assets/week3_day5_naive_vs_controlled.png)
+![Naive (no control) vs controlled latency and FPS during a CPU-stress fault](docs/assets/naive_vs_controlled_cpu_stress.png)
+
+*The fault runs from 20s to 50s. Without control (naive), the system stays on the
+heavy model and latency spikes; with control, it drops to the lighter model and
+recovers, then returns to the heavy model once the load clears.*
 
 ## Key Result
 
-This is a single Raspberry Pi 5 run per mode. Both runs used the same live USB
-camera setup and the same 30-second CPU-stress fault.
+**Under a 30-second CPU-stress fault, the controller cut p95 latency SLO
+violations from 15 to 4 and raised average FPS from 17.8 to 21.4 — by switching
+to a lighter model and recovering automatically.**
 
-| Metric | naive | controlled |
+One Raspberry Pi 5, one run per mode, same live USB camera, same fault. This run
+stresses CPU and latency only; no thermal throttling occurred (max 64 °C). The
+memory-pressure path is implemented but not part of the main comparison yet.
+
+| Metric (90 s run, 30 s fault) | naive | controlled |
 |---|---:|---:|
-| Mode | Thunder fixed | ResourceController |
-| Duration | 90.029 s | 89.044 s |
-| Rolling p95 SLO violations (`recent_latency_p95_ms > 200 ms`) | 15 rows | 4 rows |
-| Average rolling p95 latency | 92.114 ms | 62.519 ms |
-| Max rolling p95 latency | 205.677 ms | 205.315 ms |
-| Average inference time | 77.143 ms | 46.798 ms |
-| Average FPS | 17.803 | 21.379 |
-| Max CPU temperature | 64.2 C | 61.5 C |
-| Throttle rows | 0 | 0 |
+| Model under load | Thunder (fixed) | auto Thunder ↔ Lightning |
+| p95 latency SLO violations¹ | 15 | 4 |
+| Average p95 latency | 92 ms | 63 ms |
+| Average inference time | 77 ms | 47 ms |
+| Average FPS | 17.8 | 21.4 |
+| Max CPU temperature | 64 °C | 62 °C |
 | Model switches | 0 | 4 |
 
-The controlled run did not eliminate every SLO violation. It reduced rolling-p95
-violations from 15 rows to 4 rows and improved average FPS under the same fault.
-Single-frame total latency rows over 200 ms were 6 for naive and 1 for
-controlled.
+¹ Each run logs one row per second (~90 rows). A violation is a row whose rolling
+p95 latency (`recent_latency_p95_ms`) exceeds the 200 ms SLO. By a stricter
+single-frame measure (`inference_ms + preprocess_ms > 200 ms`), violations were
+6 (naive) vs 1 (controlled).
 
-Source: [`docs/week3_controlled_vs_naive.md`](docs/week3_controlled_vs_naive.md)
+The controlled run did not eliminate every violation. Both modes also hit a
+similar one-off p95 spike (~205 ms) at the instant the fault starts, before the
+controller can react; the benefit shows up in how fast each run recovers
+afterward.
+
+Source: [`docs/controlled_vs_naive.md`](docs/controlled_vs_naive.md)
 
 ## Accuracy Trade-off
 
@@ -155,10 +166,10 @@ python examples/run_monitored.py \
   --model thunder \
   --no-display \
   --duration 70 \
-  --csv-output metrics/day4_pi_thunder.csv
+  --csv-output metrics/monitored_thunder.csv
 ```
 
-Run the Week 3 comparison on the Pi:
+Run the naive-vs-controlled comparison on the Pi:
 
 ```bash
 python examples/run_controlled.py \
@@ -167,7 +178,7 @@ python examples/run_controlled.py \
   --controller-mode naive \
   --no-display \
   --duration 90 \
-  --csv-output metrics/week3_day5_pi_naive_cpu_stress_workers8.csv \
+  --csv-output metrics/naive_cpu_stress.csv \
   --no-plot \
   --fault-scenario cpu_stress \
   --fault-start-after 20 \
@@ -180,7 +191,7 @@ python examples/run_controlled.py \
   --controller-mode controlled \
   --no-display \
   --duration 90 \
-  --csv-output metrics/week3_day5_pi_controlled_cpu_stress_workers8.csv \
+  --csv-output metrics/controlled_cpu_stress.csv \
   --no-plot \
   --fault-scenario cpu_stress \
   --fault-start-after 20 \
@@ -192,10 +203,10 @@ Compare the two CSV files:
 
 ```bash
 python examples/compare_control_runs.py \
-  --naive-csv metrics/week3_day5_pi_naive_cpu_stress_workers8.csv \
-  --controlled-csv metrics/week3_day5_pi_controlled_cpu_stress_workers8.csv \
-  --markdown-output docs/week3_controlled_vs_naive.md \
-  --plot-output metrics/plots/week3_day5_naive_vs_controlled.png
+  --naive-csv metrics/naive_cpu_stress.csv \
+  --controlled-csv metrics/controlled_cpu_stress.csv \
+  --markdown-output docs/controlled_vs_naive.md \
+  --plot-output docs/assets/naive_vs_controlled_cpu_stress.png
 ```
 
 Raw CSVs, plots under `metrics/`, TFLite model files, and reference clips are
@@ -210,7 +221,7 @@ src/
   resource_monitor.py     CPU, memory, FPS, throttle, and power snapshots
   resource_controller.py  State machine and control actions
   fault_injector.py       CPU and memory pressure injection
-  metrics_collector.py    Placeholder for Week 4 summary export
+  metrics_collector.py    Summary export (not yet implemented)
 
 examples/
   run_demo.py             Live pose demo
@@ -219,22 +230,23 @@ examples/
   compare_control_runs.py Compare naive and controlled CSVs
 
 docs/
-  week3_controlled_vs_naive.md
+  controlled_vs_naive.md
   pck_pseudo_gt.md
-  assets/week3_day5_naive_vs_controlled.png
+  assets/naive_vs_controlled_cpu_stress.png
 ```
 
 ## Current Status
 
-Phase 1 has a complete baseline:
+Phase 1 has a complete baseline, built in this order:
 
-- Week 1: Mac MoveNet demo, camera loop, `PoseEstimator`, reference clips.
-- Week 2: Raspberry Pi bootstrapping, Pi inference, resource monitoring, CSV
-  logging, 10-minute stability run.
-- Week 3: `ResourceController`, hysteresis, live action execution,
-  `FaultInjector`, and one Pi naive-vs-controlled comparison.
-- Phase 1 wrap-up: English README and fixed-clip PCK pseudo-ground-truth
-  evaluation.
+- Pose estimation pipeline (MoveNet Thunder/Lightning) on macOS, then ported to
+  the Raspberry Pi.
+- On-device resource monitoring and CSV logging, including a 10-minute stability
+  run.
+- A three-state `ResourceController` with hysteresis and live action execution,
+  plus a `FaultInjector`.
+- One naive-vs-controlled comparison on the Pi, and a fixed-clip PCK
+  pseudo-ground-truth evaluation.
 
 ## Limitations
 

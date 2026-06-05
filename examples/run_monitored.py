@@ -3,7 +3,7 @@
 Usage:
     .venv/bin/python examples/run_monitored.py --no-display --duration 70
     .venv/bin/python examples/run_monitored.py --device 0 --model thunder --duration 70
-    .venv/bin/python examples/run_monitored.py --plot-only metrics/day4_pi.csv
+    .venv/bin/python examples/run_monitored.py --plot-only metrics/monitored_run.csv
 
 Generated CSV files and plots are local benchmark outputs under ``metrics/``;
 do not commit them.
@@ -98,7 +98,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--csv-output",
         type=Path,
-        default=Path("metrics/day4_run_monitored.csv"),
+        default=Path("metrics/monitored_run.csv"),
         help="CSV output path.",
     )
     parser.add_argument(

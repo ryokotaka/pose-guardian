@@ -1,4 +1,4 @@
-"""Day 5 simplified: record reference clips with a USB webcam.
+"""Record local reference clips with a USB webcam.
 
 Usage:
     .venv/bin/python examples/record_clips.py

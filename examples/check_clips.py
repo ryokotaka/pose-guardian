@@ -1,4 +1,4 @@
-"""Day 5: check recorded reference clip quality with MoveNet Thunder.
+"""Check recorded reference clip quality with MoveNet Thunder.
 
 Usage:
     .venv/bin/python examples/check_clips.py

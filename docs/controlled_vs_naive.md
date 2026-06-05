@@ -1,17 +1,17 @@
-# Week3 Controlled vs Naive
+# Controlled vs Naive (CPU-stress fault)
 
 SLO threshold: `200.0 ms`
 
 ## Conditions
 
 - Device: Raspberry Pi 5 with active cooler attached
-- Camera: USB camera on OpenCV device `0`
+- Camera: USB camera via OpenCV
 - Initial model: `thunder`
-- Run duration: 90 seconds
+- Run duration: 90 seconds per mode
 - Fault scenario: `cpu_stress`
 - Fault timing: starts after 20 seconds, runs for 30 seconds
 - CPU workers: 8
-- Raw CSV and plots are local benchmark artifacts and are not committed
+- Raw CSV files are local benchmark artifacts and are not committed
 
 ## Summary
 
@@ -25,28 +25,24 @@ SLO threshold: `200.0 ms`
 - SLO violations fell from 15 rows to 4 rows, a 73.3% reduction.
 - Average recent p95 latency fell from 92.114 ms to 62.519 ms.
 - Average inference time fell from 77.143 ms to 46.798 ms.
-- Average FPS improved from 17.803 to 21.379.
+- Average FPS improved from 17.803 to 21.379, a 20.1% gain.
 - Both runs stayed throttle-free (`throttle_rows=0`).
 
-The controlled run did not eliminate every SLO violation. It reduced the
-violation count and recovered FPS/inference latency under the same CPU stress.
-That is the correct claim for this data.
+The controlled run did not eliminate every SLO violation. It reduced the violation count and recovered FPS/inference latency under the same CPU stress. That is the correct claim for this data.
 
-The controlled run switched four times: it returned to Thunder once while the
-fault was still active, then degraded again. Week 4 should evaluate whether the
-recovery hold time, CPU usage recovery condition, or fault-active recovery policy
-should be tightened.
+The controlled run switched four times: it returned to Thunder once while the fault was still active, then degraded again. This is a tuning opportunity for a future recovery-policy pass.
 
 ## Input CSV
 
-- naive: `metrics/week3_day5_pi_naive_cpu_stress_workers8.csv`
-- controlled: `metrics/week3_day5_pi_controlled_cpu_stress_workers8.csv`
+- naive: `metrics/naive_cpu_stress.csv`
+- controlled: `metrics/controlled_cpu_stress.csv`
 
 ## Plot
 
-- `metrics/plots/week3_day5_naive_vs_controlled.png`
+- `docs/assets/naive_vs_controlled_cpu_stress.png`
 
 ## Notes
 
-- Raw CSV files and generated plots under `metrics/` are local benchmark outputs and should not be committed.
+- Raw CSV files under `metrics/` are local benchmark outputs and should not be committed.
+- A selected plot under `docs/assets/` may be committed when it is used by the README.
 - `SLO_rows` counts rows where `recent_latency_p95_ms` is greater than the SLO threshold.

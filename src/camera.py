@@ -3,9 +3,8 @@
 Spec: 00_機能仕様書.md 3.1 Camera
 
 The capture thread reads from OpenCV continuously and keeps only the
-**latest** frame so the inference loop never reads a stale buffered
-frame. Day 3 implements the ``opencv`` source only; ``picamera`` and
-``file`` sources are reserved for Phase 1 Week 2+ on the Pi.
+**latest** frame so the inference loop never reads a stale buffered frame.
+Only the ``opencv`` source is implemented in this baseline.
 """
 
 from __future__ import annotations
@@ -23,7 +22,7 @@ import numpy as np
 class CameraConfig:
     """Configuration for :class:`Camera`."""
 
-    source: str = "opencv"        # "opencv" / "picamera" / "file" (Day3 では opencv のみ)
+    source: str = "opencv"        # baseline supports "opencv"
     device_index: int = 0          # 0: built-in or first USB camera
     width: int = 640
     height: int = 480
@@ -57,7 +56,7 @@ class Camera:
         if self.config.source != "opencv":
             raise NotImplementedError(
                 f"Unsupported camera source: {self.config.source}. "
-                "Day 3 implements 'opencv' only."
+                "This baseline implements 'opencv' only."
             )
         if self._thread is not None:
             return  # already started, idempotent
@@ -164,7 +163,7 @@ class Camera:
 
 
 def open_camera(device_index: int = 0) -> cv2.VideoCapture:
-    """Day 1 helper retained for backwards compatibility.
+    """Small compatibility helper for direct OpenCV capture.
 
     Prefer :class:`Camera` for any new code that needs realtime capture.
     """

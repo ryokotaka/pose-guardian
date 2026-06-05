@@ -1,9 +1,7 @@
-# Resource Monitor Day 3
+# Resource Monitor
 
-Day 3 replaces the initial CPU/memory placeholder with a real
-`ResourceMonitor` implementation. The monitor samples resource state on both
-Raspberry Pi and local development hosts, while Pi-specific commands fall back
-safely when unavailable.
+`ResourceMonitor` samples resource state on both Raspberry Pi and local
+development hosts, while Pi-specific commands fall back safely when unavailable.
 
 ## Implemented Surface
 

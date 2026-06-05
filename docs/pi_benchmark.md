@@ -1,8 +1,8 @@
-# Pi Benchmark Day 2
+# Pi Fixed-Clip Benchmark
 
-Day 2 compares Mac and Raspberry Pi 5 inference latency with the same fixed
-reference clips. The clips live under `benchmark/reference_clips/` locally and
-must not be committed.
+This benchmark compares local development and Raspberry Pi 5 inference latency
+with the same fixed reference clips. The clips live under
+`benchmark/reference_clips/` locally and must not be committed.
 
 ## Procedure
 
@@ -18,13 +18,13 @@ must not be committed.
 2. Copy reference clips to the Pi:
 
    ```bash
-   scp benchmark/reference_clips/clip_*.mp4 ryo@edge-pi.local:~/edge-inference-guardian/benchmark/reference_clips/
+   scp benchmark/reference_clips/clip_*.mp4 <pi-user>@edge-pi.local:~/edge-inference-guardian/benchmark/reference_clips/
    ```
 
 3. Run the benchmark on Mac and Pi:
 
    ```bash
-   .venv/bin/python examples/benchmark_clips.py --csv-output metrics/day2_<host>.csv
+   .venv/bin/python examples/benchmark_clips.py --csv-output metrics/fixed_clip_<host>.csv
    ```
 
 4. Keep CSV files local. Do not commit `metrics/*.csv` or mp4 files.
@@ -33,7 +33,7 @@ must not be committed.
 
 | Item | Mac | Pi passive | Pi active cooler |
 |---|---|---|---|
-| Host | martin11.local | edge-pi | edge-pi |
+| Host | macOS dev machine | Raspberry Pi 5 | Raspberry Pi 5 |
 | OS / arch | macOS 26.5.1 / arm64 | Raspberry Pi OS Bookworm / aarch64 | Raspberry Pi OS Bookworm / aarch64 |
 | Python | 3.11.15 | 3.11.2 | 3.11.2 |
 | Runtime | ai-edge-litert | ai-edge-litert | ai-edge-litert |
@@ -141,5 +141,5 @@ to prove that the live camera path runs on Pi without crashing.
   fixed-clip workload.
 - Lightning shows enough headroom for real-time inference on Pi. Thunder remains
   below 30 FPS even with the active cooler, and the live-camera smoke reached
-  about 20 FPS. Week 3 controller thresholds should treat Lightning as the
+  about 20 FPS. Controller thresholds should treat Lightning as the
   thermal/performance fallback.

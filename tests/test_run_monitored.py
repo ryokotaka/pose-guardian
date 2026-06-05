@@ -6,12 +6,12 @@ from examples.run_monitored import CSV_FIELDS, csv_row, default_plot_path, parse
 
 
 def test_default_plot_path_uses_metrics_plots_directory() -> None:
-    path = default_plot_path(Path("metrics/day4.csv"))
+    path = default_plot_path(Path("metrics/monitored.csv"))
 
-    assert str(path) == "metrics/plots/day4.png"
+    assert str(path) == "metrics/plots/monitored.png"
 
 
-def test_csv_row_contains_required_day4_columns() -> None:
+def test_csv_row_contains_required_monitoring_columns() -> None:
     snapshot = ResourceSnapshot(
         timestamp=123.0,
         cpu_temp_celsius=41.25,

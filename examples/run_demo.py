@@ -1,4 +1,4 @@
-"""Day 4: Real-time pose estimation via PoseEstimator class.
+"""Real-time pose estimation demo via PoseEstimator.
 
 Usage:
     .venv/bin/python examples/run_demo.py
@@ -11,9 +11,8 @@ Keys (when --no-display is NOT set):
     l: switch to Lightning (light)
     q: quit
 
-Day 4 change: pose estimation is now encapsulated in
-``src.pose_estimator.PoseEstimator``. Drawing still reuses Day 2's
-``examples.sanity_check.draw_pose``.
+Pose estimation is encapsulated in ``src.pose_estimator.PoseEstimator``.
+Drawing reuses ``examples.sanity_check.draw_pose``.
 """
 
 from __future__ import annotations

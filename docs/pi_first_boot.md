@@ -105,9 +105,17 @@ See the official Raspberry Pi documentation for
 and the
 [Pi 5 power recommendation](https://www.raspberrypi.com/documentation/computers/getting-started.html#power-supply).
 
-## 7. Configure read-only GitHub access
+## 7. Configure GitHub access
 
-The Pi needs its own credential to clone this private repository. The Mac-to-Pi
+For a public repository, cloning over HTTPS is the simplest option:
+
+```bash
+cd ~
+git clone https://github.com/<github-user>/edge-inference-guardian.git
+cd edge-inference-guardian
+```
+
+If the repository is private, the Pi needs its own credential. The Mac-to-Pi
 SSH login key is a different credential.
 
 Generate a dedicated deploy key on the Pi:
@@ -149,7 +157,7 @@ SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU
 
 GitHub reports that it does not provide shell access. That is expected.
 
-Clone the repository:
+Clone over SSH:
 
 ```bash
 cd ~
@@ -157,9 +165,8 @@ git clone git@github.com:<github-user>/edge-inference-guardian.git
 cd edge-inference-guardian
 ```
 
-Alternative: if you do not want to store a GitHub deploy key on the Pi, copy
-the working tree from the Mac with `rsync`. Do not store a personal access
-token as plaintext on the Pi.
+Alternative: copy the working tree from another machine with `rsync`. Do not
+store a personal access token as plaintext on the Pi.
 
 ## 8. Create the Pi Python environment
 

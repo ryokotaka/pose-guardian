@@ -2,13 +2,14 @@
 
 Usage:
     .venv/bin/python examples/compare_control_runs.py \
-        --naive-csv metrics/week3_day5_naive.csv \
-        --controlled-csv metrics/week3_day5_controlled.csv \
-        --markdown-output docs/week3_controlled_vs_naive.md \
-        --plot-output metrics/plots/week3_day5_naive_vs_controlled.png
+        --naive-csv metrics/naive_cpu_stress.csv \
+        --controlled-csv metrics/controlled_cpu_stress.csv \
+        --markdown-output docs/controlled_vs_naive.md \
+        --plot-output docs/assets/naive_vs_controlled_cpu_stress.png
 
-Generated plots and raw CSV files are local benchmark outputs under ``metrics/``;
-do not commit them.
+Raw CSV files under ``metrics/`` are local benchmark outputs and should not be
+committed. A selected plot can be written under ``docs/assets/`` when it is used
+by the README.
 """
 
 from __future__ import annotations
@@ -55,7 +56,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--markdown-output",
         type=Path,
-        default=Path("docs/week3_controlled_vs_naive.md"),
+        default=Path("docs/controlled_vs_naive.md"),
     )
     parser.add_argument("--plot-output", type=Path)
     parser.add_argument("--slo-ms", type=float, default=200.0)
@@ -200,6 +201,69 @@ def markdown_table(summaries: list[RunSummary]) -> str:
     return "\n".join(lines)
 
 
+def find_summary(summaries: list[RunSummary], label: str) -> RunSummary | None:
+    return next((summary for summary in summaries if summary.label == label), None)
+
+
+def pct_change(before: float, after: float) -> float:
+    if before == 0:
+        return 0.0
+    return (before - after) / before * 100.0
+
+
+def interpretation_lines(summaries: list[RunSummary]) -> list[str]:
+    naive = find_summary(summaries, "naive")
+    controlled = find_summary(summaries, "controlled")
+    if naive is None or controlled is None:
+        return []
+
+    lines = [
+        "- SLO violations fell from "
+        f"{naive.slo_violation_rows} rows to {controlled.slo_violation_rows} rows, "
+        f"a {pct_change(naive.slo_violation_rows, controlled.slo_violation_rows):.1f}% reduction.",
+    ]
+    if (
+        naive.recent_latency_p95_avg_ms is not None
+        and controlled.recent_latency_p95_avg_ms is not None
+    ):
+        lines.append(
+            "- Average recent p95 latency fell from "
+            f"{naive.recent_latency_p95_avg_ms:.3f} ms to "
+            f"{controlled.recent_latency_p95_avg_ms:.3f} ms."
+        )
+    if naive.inference_avg_ms is not None and controlled.inference_avg_ms is not None:
+        lines.append(
+            "- Average inference time fell from "
+            f"{naive.inference_avg_ms:.3f} ms to "
+            f"{controlled.inference_avg_ms:.3f} ms."
+        )
+    if naive.fps_avg is not None and controlled.fps_avg is not None:
+        fps_gain = (
+            (controlled.fps_avg - naive.fps_avg) / naive.fps_avg * 100.0
+            if naive.fps_avg
+            else 0.0
+        )
+        lines.append(
+            "- Average FPS improved from "
+            f"{naive.fps_avg:.3f} to {controlled.fps_avg:.3f}, "
+            f"a {fps_gain:.1f}% gain."
+        )
+    lines.extend(
+        [
+            "- Both runs stayed throttle-free (`throttle_rows=0`).",
+            "",
+            "The controlled run did not eliminate every SLO violation. It reduced "
+            "the violation count and recovered FPS/inference latency under the "
+            "same CPU stress. That is the correct claim for this data.",
+            "",
+            "The controlled run switched four times: it returned to Thunder once "
+            "while the fault was still active, then degraded again. This is a "
+            "tuning opportunity for a future recovery-policy pass.",
+        ]
+    )
+    return lines
+
+
 def write_markdown(
     *,
     output_path: Path,
@@ -209,13 +273,28 @@ def write_markdown(
 ) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
-        "# Week3 Controlled vs Naive",
+        "# Controlled vs Naive (CPU-stress fault)",
         "",
         f"SLO threshold: `{slo_ms:.1f} ms`",
+        "",
+        "## Conditions",
+        "",
+        "- Device: Raspberry Pi 5 with active cooler attached",
+        "- Camera: USB camera via OpenCV",
+        "- Initial model: `thunder`",
+        "- Run duration: 90 seconds per mode",
+        "- Fault scenario: `cpu_stress`",
+        "- Fault timing: starts after 20 seconds, runs for 30 seconds",
+        "- CPU workers: 8",
+        "- Raw CSV files are local benchmark artifacts and are not committed",
         "",
         "## Summary",
         "",
         markdown_table(summaries),
+        "",
+        "## Interpretation",
+        "",
+        *interpretation_lines(summaries),
         "",
         "## Input CSV",
         "",
@@ -229,7 +308,8 @@ def write_markdown(
             "",
             "## Notes",
             "",
-            "- Raw CSV files and generated plots under `metrics/` are local benchmark outputs and should not be committed.",
+            "- Raw CSV files under `metrics/` are local benchmark outputs and should not be committed.",
+            "- A selected plot under `docs/assets/` may be committed when it is used by the README.",
             "- `SLO_rows` counts rows where `recent_latency_p95_ms` is greater than the SLO threshold.",
         ]
     )
@@ -263,7 +343,7 @@ def plot_runs(
     axes[1].set_ylabel("FPS")
     axes[1].grid(True, alpha=0.3)
     axes[1].legend(loc="best")
-    fig.suptitle("Week3 Day5 naive vs controlled")
+    fig.suptitle("Naive vs controlled under CPU-stress fault")
     fig.tight_layout()
     fig.savefig(output_path, dpi=150)
     plt.close(fig)

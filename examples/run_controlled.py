@@ -124,7 +124,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--csv-output",
         type=Path,
-        default=Path("metrics/week3_day3_run_controlled.csv"),
+        default=Path("metrics/controlled_run.csv"),
         help="CSV output path.",
     )
     parser.add_argument(

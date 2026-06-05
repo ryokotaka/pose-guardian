@@ -4,7 +4,7 @@ Usage:
     .venv/bin/python examples/benchmark_clips.py
     .venv/bin/python examples/benchmark_clips.py --models thunder
     .venv/bin/python examples/benchmark_clips.py --max-frames 60
-    .venv/bin/python examples/benchmark_clips.py --csv-output metrics/mac_day2.csv
+    .venv/bin/python examples/benchmark_clips.py --csv-output metrics/fixed_clip_mac.csv
 
 The default run processes every frame of the three local reference clips with
 both Thunder and Lightning. Clip files and generated CSVs are local benchmark

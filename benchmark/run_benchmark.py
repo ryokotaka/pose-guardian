@@ -4,7 +4,9 @@ from __future__ import annotations
 
 
 def main() -> None:
-    raise NotImplementedError("Benchmark runner is implemented after the Day 3 demo loop.")
+    raise NotImplementedError(
+        "Use examples/run_controlled.py or examples/benchmark_clips.py."
+    )
 
 
 if __name__ == "__main__":
