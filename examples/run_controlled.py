@@ -255,6 +255,10 @@ def apply_control_action(
         stats.force_gc_count += 1
 
 
+def should_log_action(action: ControlAction) -> bool:
+    return action.action is not ActionType.NONE
+
+
 def should_skip_frame(
     *,
     state: ControllerState,
@@ -470,6 +474,7 @@ def main() -> int:
     last_frame_id = 0
     last_pose: PoseResult | None = None
     last_action: ControlAction | None = None
+    pending_log_action: ControlAction | None = None
     recent_latencies: deque[float] = deque(maxlen=args.latency_window_size)
     stats = ControlRuntimeStats()
     start_t = time.perf_counter()
@@ -508,6 +513,7 @@ def main() -> int:
                 frame, current_id = cam.read_new_frame(last_frame_id)
                 if frame is None:
                     if now >= next_log_t:
+                        action_for_log = pending_log_action or last_action
                         write_controlled_row(
                             writer=writer,
                             snapshot=monitor.snapshot(),
@@ -515,12 +521,17 @@ def main() -> int:
                             model_name=estimator.current_model(),
                             frames_done=frames_done,
                             last_pose=last_pose,
-                            control_action=last_action,
+                            control_action=action_for_log,
                             stats=stats,
                             recent_latencies_ms=tuple(recent_latencies),
                             fault_scenario=fault_scenario,
                             fault_active=fault_active,
                         )
+                        if (
+                            pending_log_action is not None
+                            and pending_log_action is action_for_log
+                        ):
+                            pending_log_action = None
                         f.flush()
                         rows_written += 1
                         next_log_t += args.log_interval
@@ -535,6 +546,8 @@ def main() -> int:
                 action = controller.evaluate(snapshot, tuple(recent_latencies))
                 last_action = action
                 apply_control_action(action, estimator, stats)
+                if should_log_action(action):
+                    pending_log_action = action
 
                 skip_frame = should_skip_frame(
                     state=action.state,
@@ -554,6 +567,7 @@ def main() -> int:
                 now = time.perf_counter()
                 elapsed = now - start_t
                 if now >= next_log_t:
+                    action_for_log = pending_log_action or action
                     write_controlled_row(
                         writer=writer,
                         snapshot=snapshot,
@@ -561,12 +575,17 @@ def main() -> int:
                         model_name=estimator.current_model(),
                         frames_done=frames_done,
                         last_pose=last_pose,
-                        control_action=action,
+                        control_action=action_for_log,
                         stats=stats,
                         recent_latencies_ms=tuple(recent_latencies),
                         fault_scenario=fault_scenario,
                         fault_active=fault_active,
                     )
+                    if (
+                        pending_log_action is not None
+                        and pending_log_action is action_for_log
+                    ):
+                        pending_log_action = None
                     f.flush()
                     rows_written += 1
                     next_log_t += args.log_interval

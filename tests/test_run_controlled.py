@@ -9,6 +9,7 @@ from examples.run_controlled import (
     apply_control_action,
     controlled_csv_row,
     latency_p95,
+    should_log_action,
     should_skip_frame,
 )
 
@@ -90,6 +91,13 @@ def test_apply_control_action_force_gc(monkeypatch) -> None:
 
     assert calls == ["gc"]
     assert stats.force_gc_count == 1
+
+
+def test_should_log_action_only_keeps_real_actions() -> None:
+    assert should_log_action(make_action(ActionType.SWITCH_TO_LIGHT)) is True
+    assert should_log_action(make_action(ActionType.SWITCH_TO_HEAVY)) is True
+    assert should_log_action(make_action(ActionType.FORCE_GC)) is True
+    assert should_log_action(make_action(ActionType.NONE)) is False
 
 
 def test_should_skip_frame_only_in_critical() -> None:
