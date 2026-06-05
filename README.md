@@ -35,6 +35,27 @@ controlled.
 
 Source: [`docs/week3_controlled_vs_naive.md`](docs/week3_controlled_vs_naive.md)
 
+## Accuracy Trade-off
+
+The project also measures the localization drift introduced by switching from
+Thunder to Lightning on the fixed reference clips.
+
+This is a pseudo-ground-truth evaluation: Thunder is treated as the reference
+model, and Lightning is compared against it. It does not replace a human-labeled
+pose benchmark.
+
+| Metric | Value |
+|---|---:|
+| Clips | still / slow / fast |
+| Evaluated frames | 540 |
+| Eligible keypoints | 8,926 |
+| PCK@0.05, Thunder pseudo-GT -> Lightning | 0.974 |
+| Mean normalized keypoint distance | 0.0130 |
+| Thunder average confidence | 0.749 |
+| Lightning average confidence | 0.677 |
+
+Source: [`docs/pck_pseudo_gt.md`](docs/pck_pseudo_gt.md)
+
 ## What It Does
 
 - Runs MoveNet SinglePose Thunder and Lightning on camera frames.
@@ -96,8 +117,8 @@ In the current CPU-stress comparison, the controlled run switched:
 
 That means the controller recovered once while the fault was still active, then
 degraded again. This is useful evidence, but it also shows a tuning opportunity:
-Week 4 should evaluate a longer recovery hold time or a CPU-usage recovery
-condition.
+a future tuning pass should evaluate a longer recovery hold time or a CPU-usage
+recovery condition.
 
 ## Fault Injection
 
@@ -199,18 +220,21 @@ examples/
 
 docs/
   week3_controlled_vs_naive.md
+  pck_pseudo_gt.md
   assets/week3_day5_naive_vs_controlled.png
 ```
 
 ## Current Status
 
-Phase 1 is partially complete:
+Phase 1 has a complete baseline:
 
 - Week 1: Mac MoveNet demo, camera loop, `PoseEstimator`, reference clips.
 - Week 2: Raspberry Pi bootstrapping, Pi inference, resource monitoring, CSV
   logging, 10-minute stability run.
 - Week 3: `ResourceController`, hysteresis, live action execution,
   `FaultInjector`, and one Pi naive-vs-controlled comparison.
+- Phase 1 wrap-up: English README and fixed-clip PCK pseudo-ground-truth
+  evaluation.
 
 ## Limitations
 
@@ -218,7 +242,8 @@ Phase 1 is partially complete:
 - The current comparison uses live camera input, so lighting and pose are not as
   controlled as fixed-clip inference.
 - `light-only` comparison mode is not in the main result table yet.
-- PCK or another objective pose-accuracy metric is not measured yet.
+- PCK is measured only as Thunder pseudo-ground-truth vs Lightning. Human-labeled
+  ground truth is not available yet.
 - `memory_pressure` is implemented but has not been used for the main
   comparison table.
 - `camera_disconnect` is not wired into the camera loop yet.
@@ -226,9 +251,9 @@ Phase 1 is partially complete:
 
 ## Roadmap
 
-- Week 4: add `MetricsCollector` JSON summaries and multi-run comparison.
+- Add `MetricsCollector` JSON summaries and multi-run comparison.
 - Add a `light-only` baseline.
-- Add fixed-clip accuracy evaluation with PCK.
+- Add human-labeled or external-dataset pose accuracy evaluation.
 - Tune recovery behavior after the observed extra Thunder/Lightning switch.
 - Add a short demo GIF after the README result graph is stable.
 - Phase 2: build gesture control on top of the same pose pipeline.
