@@ -46,6 +46,27 @@ afterward.
 
 Source: [`docs/controlled_vs_naive.md`](docs/controlled_vs_naive.md)
 
+## Repeated CPU-Stress Runs
+
+The same paired Pi CPU-stress experiment was repeated three more times. Across
+four paired runs, controlled mode improved average p95 latency, inference time,
+and FPS in every pair. SLO rows improved in three of four pairs and fell in
+aggregate from 35 rows to 14 rows.
+
+| Aggregate metric | naive | controlled |
+|---|---:|---:|
+| Total p95 SLO violation rows | 35 | 14 |
+| Average p95 latency | 93 ms | 65 ms |
+| Average inference time | 77 ms | 50 ms |
+| Average FPS | 13.4 | 15.4 |
+| Thermal throttle rows | 0 | 0 |
+
+The repeated runs are still a small live-camera sample, not a large benchmark.
+They support an aggregate latency/FPS improvement under CPU-stress-induced
+latency pressure. They do not prove that every individual run reduces SLO rows.
+
+Source: [`docs/repeated_cpu_stress.md`](docs/repeated_cpu_stress.md)
+
 ## Accuracy Trade-off
 
 The project also measures the localization drift introduced by switching from
@@ -137,13 +158,20 @@ Implemented scenarios:
 
 | Scenario | Status | Purpose |
 |---|---|---|
-| `cpu_stress` | measured on Pi | Create latency pressure without relying on heat |
-| `memory_pressure` | implemented, not yet used for the main comparison | Exercise `critical` behavior and forced cleanup |
+| `cpu_stress` | measured on Pi across four paired runs | Create latency pressure without relying on heat |
+| `memory_pressure` | smoke-tested on Pi | Trigger memory-based degradation and recovery |
 | `camera_disconnect` | placeholder | Future scenario for stale-frame / reconnect handling |
 
 The CPU-stress path uses `stress-ng` when available and falls back to Python
 busy-loop workers. Fault processes are separate child processes and are cleaned
 up with `clear_all()`.
+
+The memory-pressure smoke test reached about 84% memory usage, triggered
+`normal -> degraded`, switched Thunder to Lightning, then recovered back to
+Thunder after the fault cleared. It did not exercise the `critical` / `force_gc`
+path.
+
+Source: [`docs/memory_pressure_smoke.md`](docs/memory_pressure_smoke.md)
 
 ## Run It
 
@@ -231,6 +259,8 @@ examples/
 
 docs/
   controlled_vs_naive.md
+  repeated_cpu_stress.md
+  memory_pressure_smoke.md
   pck_pseudo_gt.md
   assets/naive_vs_controlled_cpu_stress.png
 ```
@@ -245,25 +275,26 @@ Phase 1 has a complete baseline, built in this order:
   run.
 - A three-state `ResourceController` with hysteresis and live action execution,
   plus a `FaultInjector`.
-- One naive-vs-controlled comparison on the Pi, and a fixed-clip PCK
-  pseudo-ground-truth evaluation.
+- Four paired naive-vs-controlled CPU-stress runs on the Pi, one memory-pressure
+  smoke test, and a fixed-clip PCK pseudo-ground-truth evaluation.
 
 ## Limitations
 
-- The key result is one run per mode on one Raspberry Pi 5.
+- The headline graph is one run per mode on one Raspberry Pi 5; repeated
+  CPU-stress runs are summarized separately.
 - The current comparison uses live camera input, so lighting and pose are not as
   controlled as fixed-clip inference.
 - `light-only` comparison mode is not in the main result table yet.
 - PCK is measured only as Thunder pseudo-ground-truth vs Lightning. Human-labeled
   ground truth is not available yet.
-- `memory_pressure` is implemented but has not been used for the main
-  comparison table.
+- `memory_pressure` has only a smoke test so far; it has not been benchmarked
+  against a naive baseline.
 - `camera_disconnect` is not wired into the camera loop yet.
 - The controller reduced SLO violations but did not eliminate them.
 
 ## Roadmap
 
-- Add `MetricsCollector` JSON summaries and multi-run comparison.
+- Add `MetricsCollector` JSON summaries and automate multi-run comparison.
 - Add a `light-only` baseline.
 - Add human-labeled or external-dataset pose accuracy evaluation.
 - Tune recovery behavior after the observed extra Thunder/Lightning switch.
