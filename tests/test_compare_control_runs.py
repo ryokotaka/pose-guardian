@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from examples.compare_control_runs import (
+    interpretation_lines,
     markdown_table,
     parse_bool,
     parse_float,
@@ -101,3 +102,69 @@ def test_markdown_table_contains_comparison_columns() -> None:
     assert "controlled" in table
     assert "switch_to_light:1" in table
     assert "lightning:1" in table
+
+
+def test_interpretation_does_not_call_higher_slo_rows_a_reduction() -> None:
+    naive = summarize_run(
+        label="naive",
+        csv_path=Path("metrics/naive.csv"),
+        rows=[
+            {
+                "elapsed_s": "1.0",
+                "controller_mode": "naive",
+                "model": "thunder",
+                "state": "normal",
+                "action": "none",
+                "fault_active": "True",
+                "recent_latency_p95_ms": "201.0",
+                "inference_ms": "80.0",
+                "fps": "12.0",
+                "cpu_temp": "55.0",
+                "is_throttled": "False",
+                "model_switches": "0",
+            }
+        ],
+        slo_ms=200.0,
+    )
+    controlled = summarize_run(
+        label="controlled",
+        csv_path=Path("metrics/controlled.csv"),
+        rows=[
+            {
+                "elapsed_s": "1.0",
+                "controller_mode": "controlled",
+                "model": "lightning",
+                "state": "degraded",
+                "action": "switch_to_light",
+                "fault_active": "True",
+                "recent_latency_p95_ms": "201.0",
+                "inference_ms": "50.0",
+                "fps": "13.0",
+                "cpu_temp": "60.0",
+                "is_throttled": "False",
+                "model_switches": "1",
+            },
+            {
+                "elapsed_s": "2.0",
+                "controller_mode": "controlled",
+                "model": "lightning",
+                "state": "degraded",
+                "action": "none",
+                "fault_active": "True",
+                "recent_latency_p95_ms": "202.0",
+                "inference_ms": "52.0",
+                "fps": "13.0",
+                "cpu_temp": "60.0",
+                "is_throttled": "False",
+                "model_switches": "1",
+            },
+        ],
+        slo_ms=200.0,
+    )
+
+    text = "\n".join(interpretation_lines([naive, controlled]))
+
+    assert "SLO violations rose from 1 rows to 2 rows" in text
+    assert "fell from 1 rows to 2 rows" not in text
+    assert "a -100.0% reduction" not in text
+    assert "should not be used as evidence for SLO-violation reduction" in text

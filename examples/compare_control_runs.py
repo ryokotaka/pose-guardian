@@ -211,54 +211,123 @@ def pct_change(before: float, after: float) -> float:
     return (before - after) / before * 100.0
 
 
+def comparison_sentence(
+    *,
+    label: str,
+    before: float,
+    after: float,
+    unit: str = "",
+    lower_is_better: bool = True,
+    precision: int = 3,
+) -> str:
+    before_text = f"{before:.{precision}f}"
+    after_text = f"{after:.{precision}f}"
+    if unit:
+        before_text = f"{before_text} {unit}"
+        after_text = f"{after_text} {unit}"
+
+    if before == after:
+        return f"- {label} stayed at {after_text}."
+
+    improved = after < before if lower_is_better else after > before
+    if improved:
+        verb = "fell" if lower_is_better else "improved"
+        return f"- {label} {verb} from {before_text} to {after_text}."
+
+    verb = "rose" if lower_is_better else "fell"
+    return f"- {label} {verb} from {before_text} to {after_text}."
+
+
 def interpretation_lines(summaries: list[RunSummary]) -> list[str]:
     naive = find_summary(summaries, "naive")
     controlled = find_summary(summaries, "controlled")
     if naive is None or controlled is None:
         return []
 
-    lines = [
-        "- SLO violations fell from "
-        f"{naive.slo_violation_rows} rows to {controlled.slo_violation_rows} rows, "
-        f"a {pct_change(naive.slo_violation_rows, controlled.slo_violation_rows):.1f}% reduction.",
-    ]
+    if controlled.slo_violation_rows < naive.slo_violation_rows:
+        lines = [
+            "- SLO violations fell from "
+            f"{naive.slo_violation_rows} rows to "
+            f"{controlled.slo_violation_rows} rows, "
+            f"a {pct_change(naive.slo_violation_rows, controlled.slo_violation_rows):.1f}% reduction.",
+        ]
+        slo_interpretation = (
+            "The controlled run did not eliminate every SLO violation. It reduced "
+            "the violation count and recovered FPS/inference latency under the "
+            "same CPU stress. That is the correct claim for this data."
+        )
+    elif controlled.slo_violation_rows == naive.slo_violation_rows:
+        lines = [
+            "- SLO violations stayed at "
+            f"{controlled.slo_violation_rows} rows in both runs.",
+        ]
+        slo_interpretation = (
+            "The controlled run improved some performance metrics but did not "
+            "change the SLO violation count. This run should not be used as "
+            "evidence for SLO-violation reduction."
+        )
+    else:
+        lines = [
+            "- SLO violations rose from "
+            f"{naive.slo_violation_rows} rows to "
+            f"{controlled.slo_violation_rows} rows."
+        ]
+        slo_interpretation = (
+            "The controlled run improved some performance metrics but increased "
+            "the SLO violation count. This run should not be used as evidence "
+            "for SLO-violation reduction."
+        )
+
     if (
         naive.recent_latency_p95_avg_ms is not None
         and controlled.recent_latency_p95_avg_ms is not None
     ):
         lines.append(
-            "- Average recent p95 latency fell from "
-            f"{naive.recent_latency_p95_avg_ms:.3f} ms to "
-            f"{controlled.recent_latency_p95_avg_ms:.3f} ms."
+            comparison_sentence(
+                label="Average recent p95 latency",
+                before=naive.recent_latency_p95_avg_ms,
+                after=controlled.recent_latency_p95_avg_ms,
+                unit="ms",
+                lower_is_better=True,
+            )
         )
     if naive.inference_avg_ms is not None and controlled.inference_avg_ms is not None:
         lines.append(
-            "- Average inference time fell from "
-            f"{naive.inference_avg_ms:.3f} ms to "
-            f"{controlled.inference_avg_ms:.3f} ms."
+            comparison_sentence(
+                label="Average inference time",
+                before=naive.inference_avg_ms,
+                after=controlled.inference_avg_ms,
+                unit="ms",
+                lower_is_better=True,
+            )
         )
     if naive.fps_avg is not None and controlled.fps_avg is not None:
-        fps_gain = (
-            (controlled.fps_avg - naive.fps_avg) / naive.fps_avg * 100.0
-            if naive.fps_avg
-            else 0.0
+        fps_line = comparison_sentence(
+            label="Average FPS",
+            before=naive.fps_avg,
+            after=controlled.fps_avg,
+            lower_is_better=False,
         )
-        lines.append(
-            "- Average FPS improved from "
-            f"{naive.fps_avg:.3f} to {controlled.fps_avg:.3f}, "
-            f"a {fps_gain:.1f}% gain."
+        if controlled.fps_avg > naive.fps_avg and naive.fps_avg:
+            fps_gain = (controlled.fps_avg - naive.fps_avg) / naive.fps_avg * 100.0
+            fps_line = fps_line[:-1] + f", a {fps_gain:.1f}% gain."
+        lines.append(fps_line)
+    if naive.throttle_rows == 0 and controlled.throttle_rows == 0:
+        throttle_line = "- Both runs stayed throttle-free (`throttle_rows=0`)."
+    else:
+        throttle_line = (
+            "- Throttle rows: "
+            f"naive={naive.throttle_rows}, controlled={controlled.throttle_rows}."
         )
     lines.extend(
         [
-            "- Both runs stayed throttle-free (`throttle_rows=0`).",
+            throttle_line,
             "",
-            "The controlled run did not eliminate every SLO violation. It reduced "
-            "the violation count and recovered FPS/inference latency under the "
-            "same CPU stress. That is the correct claim for this data.",
+            slo_interpretation,
             "",
-            "The controlled run switched four times: it returned to Thunder once "
-            "while the fault was still active, then degraded again. This is a "
-            "tuning opportunity for a future recovery-policy pass.",
+            f"The controlled run switched {controlled.final_model_switches} times. "
+            "Repeated switching is useful evidence, but it also marks a tuning "
+            "opportunity for the recovery policy.",
         ]
     )
     return lines
