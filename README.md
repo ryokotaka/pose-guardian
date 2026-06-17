@@ -51,7 +51,7 @@ You can also see it over time — the fault runs from 20 s to 50 s. Without cont
 latency spikes and stays high; with control, the system drops to the lighter
 model, recovers, and returns to the heavy model once recovery conditions hold:
 
-![Naive vs controlled latency and FPS during the CPU-stress fault](docs/assets/naive_vs_controlled_cpu_stress.png)
+![Naive vs controlled p95 latency over time: naive stays above the 200 ms SLO through the fault while the controller drops to Lightning and recovers](docs/assets/naive_vs_controlled_timeline.svg)
 
 | Metric (90 s run, 30 s fault) | naive | controlled |
 | --- | ---: | ---: |
