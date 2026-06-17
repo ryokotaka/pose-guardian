@@ -10,7 +10,7 @@ switches between a heavier and a lighter model when the device is under pressure
 ![Target](https://img.shields.io/badge/target-Raspberry%20Pi%205-c51a4a.svg)
 ![Status](https://img.shields.io/badge/status-research%20experiment-555.svg)
 
-> **Part of the Edge Guardian series** — resource-aware adaptive model switching on the Raspberry Pi 5. Sibling project: **Thermal Guardian**, a thermal-aware Q8/Q4 LLM router for the same device. Same core idea (shed load gracefully under pressure), two domains: vision and LLM.
+> **Part of the Edge Guardian series** — resource-aware adaptive model switching on the Raspberry Pi 5. Sibling project: [**Thermal Guardian**](https://github.com/ryokotaka/thermal-guardian), a thermal-aware Q8/Q4 LLM router for the same device. Same core idea (shed load gracefully under pressure), two domains: vision and LLM.
 
 ---
 
