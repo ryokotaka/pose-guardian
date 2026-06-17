@@ -48,10 +48,11 @@ Under a 30-second CPU-stress fault, "naive" stays locked on the heavy model;
 ![Naive vs controlled summary: SLO violations, latency, inference time, and FPS](docs/assets/naive_vs_controlled_summary.svg)
 
 You can also see it over time — the fault runs from 20 s to 50 s. Without control,
-latency spikes and stays high; with control, the system drops to the lighter
-model, recovers, and returns to the heavy model once recovery conditions hold:
+latency stays high and the frame rate collapses (to ~6 FPS); with control, the
+system drops to the lighter model and holds both latency and FPS (~20 FPS),
+returning to Thunder once recovery conditions hold:
 
-![Naive vs controlled p95 latency over time: naive stays above the 200 ms SLO through the fault while the controller drops to Lightning and recovers](docs/assets/naive_vs_controlled_timeline.svg)
+![Naive vs controlled p95 latency and FPS over time: during the fault naive stays above the 200 ms SLO and its frame rate collapses, while the controller switches to Lightning and holds both](docs/assets/naive_vs_controlled_timeline.svg)
 
 | Metric (90 s run, 30 s fault) | naive | controlled |
 | --- | ---: | ---: |
