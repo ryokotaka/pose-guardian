@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="508" viewBox="0 0 960 508" role="img" aria-labelledby="title desc">
+  <title id="title">Naive vs controlled under a CPU-stress fault on Raspberry Pi 5</title>
+  <desc id="desc">Comparison of naive (no control) versus the resource controller on four headline metrics during a 30-second CPU-stress fault: p95-latency SLO violations 15 to 4, average p95 latency 92 to 63 ms, average inference time 77 to 47 ms, and average FPS 17.8 to 21.4. One run per mode on one Raspberry Pi 5.</desc>
+
+  <rect width="960" height="508" fill="#f6f8f8"/>
+
+  <!-- Header -->
+  <text x="40" y="44" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700" fill="#16241f">Naive vs. controlled during a 30-second CPU-stress fault</text>
+  <text x="40" y="72" font-family="Arial, Helvetica, sans-serif" font-size="14.5" fill="#56635f">Raspberry Pi 5 &#183; MoveNet pose estimation &#183; one run per mode (headline graph).</text>
+
+  <!-- Takeaway band -->
+  <rect x="40" y="86" width="880" height="46" rx="9" fill="#eef3fb" stroke="#d6e0f5"/>
+  <text x="60" y="115" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#28406e"><tspan font-weight="700">Takeaway:</tspan> under the fault, the controller cut SLO violations 15 &#8594; 4 and raised FPS 17.8 &#8594; 21.4 by switching to the lighter model.</text>
+
+  <!-- Tile 1: SLO violations -->
+  <g transform="translate(40 150)">
+    <rect x="0" y="0" width="430" height="120" rx="12" fill="#ffffff" stroke="#e3e9e7"/>
+    <text x="20" y="28" font-family="Arial, Helvetica, sans-serif" font-size="14.5" font-weight="700" fill="#16241f">p95-latency SLO violations</text>
+    <text x="410" y="26" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#8a948f">lower is better</text>
+    <text x="20" y="58" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#7c8682">naive</text>
+    <text x="20" y="87" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#7c8682">control</text>
+    <rect x="78" y="46" width="180" height="15" rx="4" fill="#9aa6b2"/>
+    <rect x="78" y="75" width="48" height="15" rx="4" fill="#3f72d4"/>
+    <text x="264" y="58" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" fill="#16241f">15</text>
+    <text x="264" y="87" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" fill="#16241f">4</text>
+    <rect x="330" y="52" width="84" height="26" rx="13" fill="#e7f3ee"/>
+    <text x="372" y="69" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12.5" font-weight="700" fill="#15795b">&#8722;73%</text>
+  </g>
+
+  <!-- Tile 2: avg p95 latency -->
+  <g transform="translate(490 150)">
+    <rect x="0" y="0" width="430" height="120" rx="12" fill="#ffffff" stroke="#e3e9e7"/>
+    <text x="20" y="28" font-family="Arial, Helvetica, sans-serif" font-size="14.5" font-weight="700" fill="#16241f">Average p95 latency</text>
+    <text x="410" y="26" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#8a948f">lower is better</text>
+    <text x="20" y="58" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#7c8682">naive</text>
+    <text x="20" y="87" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#7c8682">control</text>
+    <rect x="78" y="46" width="180" height="15" rx="4" fill="#9aa6b2"/>
+    <rect x="78" y="75" width="122" height="15" rx="4" fill="#3f72d4"/>
+    <text x="264" y="58" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" fill="#16241f">92 ms</text>
+    <text x="264" y="87" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" fill="#16241f">63 ms</text>
+    <rect x="330" y="52" width="84" height="26" rx="13" fill="#e7f3ee"/>
+    <text x="372" y="69" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12.5" font-weight="700" fill="#15795b">&#8722;32%</text>
+  </g>
+
+  <!-- Tile 3: avg inference -->
+  <g transform="translate(40 288)">
+    <rect x="0" y="0" width="430" height="120" rx="12" fill="#ffffff" stroke="#e3e9e7"/>
+    <text x="20" y="28" font-family="Arial, Helvetica, sans-serif" font-size="14.5" font-weight="700" fill="#16241f">Average inference time</text>
+    <text x="410" y="26" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#8a948f">lower is better</text>
+    <text x="20" y="58" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#7c8682">naive</text>
+    <text x="20" y="87" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#7c8682">control</text>
+    <rect x="78" y="46" width="180" height="15" rx="4" fill="#9aa6b2"/>
+    <rect x="78" y="75" width="109" height="15" rx="4" fill="#3f72d4"/>
+    <text x="264" y="58" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" fill="#16241f">77 ms</text>
+    <text x="264" y="87" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" fill="#16241f">47 ms</text>
+    <rect x="330" y="52" width="84" height="26" rx="13" fill="#e7f3ee"/>
+    <text x="372" y="69" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12.5" font-weight="700" fill="#15795b">&#8722;39%</text>
+  </g>
+
+  <!-- Tile 4: avg FPS -->
+  <g transform="translate(490 288)">
+    <rect x="0" y="0" width="430" height="120" rx="12" fill="#ffffff" stroke="#e3e9e7"/>
+    <text x="20" y="28" font-family="Arial, Helvetica, sans-serif" font-size="14.5" font-weight="700" fill="#16241f">Average FPS</text>
+    <text x="410" y="26" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#8a948f">higher is better</text>
+    <text x="20" y="58" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#7c8682">naive</text>
+    <text x="20" y="87" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#7c8682">control</text>
+    <rect x="78" y="46" width="150" height="15" rx="4" fill="#9aa6b2"/>
+    <rect x="78" y="75" width="180" height="15" rx="4" fill="#3f72d4"/>
+    <text x="264" y="58" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" fill="#16241f">17.8</text>
+    <text x="264" y="87" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" fill="#16241f">21.4</text>
+    <rect x="330" y="52" width="84" height="26" rx="13" fill="#e7f3ee"/>
+    <text x="372" y="69" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12.5" font-weight="700" fill="#15795b">+20%</text>
+  </g>
+
+  <!-- Reliability chips -->
+  <g font-family="Arial, Helvetica, sans-serif" font-size="12.5">
+    <rect x="40" y="426" width="244" height="26" rx="13" fill="#eef2f0"/>
+    <text x="162" y="443" text-anchor="middle" fill="#45524f">1 Pi 5 &#183; 1 run per mode (headline)</text>
+    <rect x="296" y="426" width="140" height="26" rx="13" fill="#eef2f0"/>
+    <text x="366" y="443" text-anchor="middle" fill="#45524f">0 thermal throttling</text>
+    <rect x="448" y="426" width="132" height="26" rx="13" fill="#eef2f0"/>
+    <text x="514" y="443" text-anchor="middle" fill="#45524f">4 model switches</text>
+    <rect x="592" y="426" width="232" height="26" rx="13" fill="#e7f3ee"/>
+    <text x="708" y="443" text-anchor="middle" fill="#15795b">latency/FPS trend held across 4 runs</text>
+  </g>
+
+  <!-- Footer -->
+  <text x="40" y="476" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#7c8682">90 s run, CPU-stress fault 20&#8211;50 s, 8 workers &#183; SLO = 200 ms rolling p95 &#183; live USB camera, so lighting and pose vary between runs.</text>
+  <text x="40" y="494" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#7c8682">Switching to Lightning adds small localization drift (PCK@0.05 = 0.974 vs Thunder). One run per mode; repeated runs reported separately.</text>
+</svg>
