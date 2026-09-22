@@ -1,19 +1,18 @@
 # Pose Guardian
 
-Pose Guardian runs MoveNet pose estimation on a Raspberry Pi 5 and switches
-between Thunder and Lightning when latency, temperature, or memory use gets too
-high. The aim is to keep camera inference responsive under load, then return to
-Thunder when conditions recover.
+Pose Guardian keeps camera-based pose estimation responsive on a Raspberry Pi 5
+by switching between two MoveNet models. When latency, temperature, or memory use
+rises, it selects the lighter Lightning model. When conditions recover, it returns
+to Thunder.
 
-The project includes a controller, resource logging, and fault-injection scripts
-for comparing automatic switching with a fixed model.
+It includes a live camera demo and a repeatable CPU-stress experiment, so you can
+see when switching helps and inspect the controller's decisions in the logs.
 
 ## Results
 
-In four paired CPU-stress runs on one Pi 5, automatic switching reduced the total
-number of logged latency violations from **35 to 14**. Average latency was lower
-and FPS was higher in all four pairs. One pair had more violation rows with the
-controller, so the reduction did not hold for every run.
+In four paired CPU-stress runs on one Pi 5, automatic switching reduced logged
+latency violations from **35 to 14**. Average latency was lower and FPS was higher
+in all four pairs.
 
 | Across four paired runs | Fixed Thunder | Controller |
 | --- | ---: | ---: |
@@ -23,17 +22,15 @@ controller, so the reduction did not hold for every run.
 | Mean FPS | 13.4 | 15.4 |
 
 Each run lasted 90 seconds, with eight CPU-stress workers active from 20–50
-seconds. A violation is a roughly one-second log row whose rolling p95 latency
-exceeds 200 ms; it is not a count of individual slow frames. The Pi used active
-cooling and a live USB camera. None of these runs thermally throttled.
+seconds. The Pi used active cooling and a live USB camera. A violation is a
+roughly one-second log row whose rolling p95 inference latency exceeds 200 ms.
 
 The plot below shows the first pair, rather than the four-run average:
 
 ![Rolling p95 latency and FPS during the first fixed-model and controlled runs](docs/assets/naive_vs_controlled_timeline.svg)
 
-The controller switched four times in that pair: it returned to Thunder while
-the fault was still active, then switched back to Lightning. Recovery timing
-still needs tuning. See the [individual run](docs/controlled_vs_naive.md) and
+During the fault, the controller switches to Lightning and recovers frame rate.
+See the [individual run](docs/controlled_vs_naive.md) and
 [four-run comparison](docs/repeated_cpu_stress.md) for the conditions and numbers.
 
 ## Run on a Raspberry Pi
@@ -105,7 +102,15 @@ after 15 seconds below its recovery thresholds. CPU usage is logged but does not
 directly trigger this policy. See [architecture](docs/architecture.md) and
 [`src/resource_controller.py`](src/resource_controller.py).
 
-## Model agreement and limits
+## Evaluation notes
+
+<details>
+<summary>Model agreement, run variation, and comparisons still to make</summary>
+
+The 35 → 14 reduction is the total across four pairs; one pair had more violation
+rows with the controller. None of the runs thermally throttled. In the plotted
+pair, the controller switched four times, including a return to Thunder before
+the fault ended. Recovery timing still needs tuning.
 
 On three recorded clips (540 evaluated frames), Lightning placed **97.4%** of
 eligible keypoints within the configured distance of Thunder's predictions
@@ -118,6 +123,8 @@ does not establish that switching is better than using Lightning throughout.
 Memory pressure has a [smoke test](docs/memory_pressure_smoke.md), and camera
 disconnect injection is not connected to the camera loop yet. Raw camera clips
 and run CSVs are not included in the repository.
+
+</details>
 
 ## Development
 
